@@ -1,5 +1,5 @@
 hirom
-header
+; header
 
 table c3.tbl,rtl ; this is just your typical menu character encodings
 
@@ -95,7 +95,6 @@ PlayerCountPtr:
 
 org $C3A445
 DecodeBattleKeys:
-  JSR BackupVars
   JSR ReadJoypads
   TDC
   LDA !character_slot
@@ -110,10 +109,9 @@ DecodeBattleKeys:
   ASL                             ; 2-player: 1,2,1,2
   TAX                             ; 3-player: 1,2,3,1
   REP #$20                        ;
-  LDA $F0,X                       ; Load inputs for joypad N
+  LDA $0250,X                     ; Load inputs for joypad N
   SEP #$20
   TAX
-  JSR RestoreVars
   JMP DecodeBattleKeys2
 
 ; =========================================
@@ -133,57 +131,29 @@ org $C3A4B2      ; Scrap the old "merged inputs" behaviour that was located here
 
 org ReclaimedContinued
 MergeInputs:
-  JSR BackupVars
   JSR ReadJoypads
   REP #$20
-  LDA $F0        ; Joypad 1 inputs
-  ORA $F2        ; Joypad 2 inputs
-  ORA $F4        ; Joypad 3 inputs
-  ORA $F6        ; Joypad 4 inputs
+  LDA $0250      ; Joypad 1 inputs
+  ORA $0252      ; Joypad 2 inputs
+  ORA $0254      ; Joypad 3 inputs
+  ORA $0256      ; Joypad 4 inputs
   TAX
   SEP #$20
-  JSR RestoreVars
   RTS
 
 ; =============================================
 ; =  Custom multitap-enabled joypad decoding  =
 ; =============================================
 
-BackupVars:
-  PHX
-  PHA
-  REP #$20
-  LDX #$0006
-- LDA $F0,X         ; Reserve $F0-F7 for P1-4 inputs
-  STA $0250,X       ; Backup old values to $0250-$0257
-  DEX
-  DEX
-  BNE -
-  SEP #$20
-  PLA
-  PLX
-  RTS
-
-RestoreVars:
-  PHX
-  LDX #$0006
-- LDY $0250,X       ; Put old $F0-F7 values back together
-  STY $F0,X
-  DEX
-  DEX
-  BNE -
-  PLX
-  RTS
-
 ReadJoypads: ; Credit to Vitor Vilela for the MP5 input decoding workaround
   REP #$20
   LDA $4218         ;\
-  STA $F0           ; \
+  STA $0250         ; \
   LDA $421A         ;  Read joypads 1-3
-  STA $F2           ;  and store to tmp
+  STA $0252         ;  and store to tmp
   LDA $421E         ; /
-  STA $F4           ;/
-  STZ $F6           ; Cannot read joypad 4 from Auto Joypad
+  STA $0254         ;/
+  STZ $0256         ; Cannot read joypad 4 from Auto Joypad
   SEP #$20
 
   STZ $4201         ; I/O port 1->0
@@ -197,7 +167,7 @@ ReadJoypads: ; Credit to Vitor Vilela for the MP5 input decoding workaround
 - LDA $4017         ; Read controller 4 button
   REP #$20          ; and roll to $F6 (P4 tmp).
   LSR
-  ROL $F6
+  ROL $0256
   SEP #$20
   DEX
   BNE -             ; Loop for next input bit
