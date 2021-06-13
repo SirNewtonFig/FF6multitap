@@ -86,6 +86,13 @@ PlayerCountPtr:
   padbyte $FF
   pad $C32388             ; Free up whatever is left
 
+org $C324F8               ; Swap assigned joypad for switched members
+  padbyte $FF
+  pad $C32537             ; Don't need this anymore!
+
+org $C324B4               ; Switch members in Order menu > Swap battle pads
+  rep 3 : NOP             ; Just skip this step, unnecessary
+
 
 ; =========================================
 ; =  C3 battle joypad assignment routine  =
