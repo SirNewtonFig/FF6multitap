@@ -103,7 +103,8 @@ org $C324B4               ; Switch members in Order menu > Swap battle pads
 org $C3A445
 DecodeBattleKeys:
   JSR ReadJoypads
-  TDC
+  JSR MergeBattleInputs           ; load merged inputs onto X if nobody is active
+  BNE .done                       ; if merged inputs were not loaded, A will be clear
   LDA !character_slot
 .loop
   CMP !number_additional_players
@@ -117,8 +118,9 @@ DecodeBattleKeys:
   TAX                             ; 3-player: 1,2,3,1
   REP #$20                        ;
   LDA $0250,X                     ; Load inputs for joypad N
-  SEP #$20
   TAX
+  SEP #$20
+.done
   JMP DecodeBattleKeys2
 
 ; =========================================
@@ -147,6 +149,18 @@ MergeInputs:
   TAX
   SEP #$20
   RTS
+
+MergeBattleInputs:
+  LDA $7E7BC2         ; Current menu cursor state
+  BNE .activePlayer   ; 0 = no active turn
+  JSR MergeInputs     ; allow inputs from anyone
+  LDA #$01            ; set flag to prevent regular input loading
+  BRA .done           ; exit
+.activePlayer
+  TDC                 ; clear accumulator = proceed to decode inputs from specific joypad
+.done
+  RTS
+
 
 ; =============================================
 ; =  Custom multitap-enabled joypad decoding  =
