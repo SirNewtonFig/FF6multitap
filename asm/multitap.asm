@@ -141,11 +141,15 @@ org $C3A4B2      ; Scrap the old "merged inputs" behaviour that was located here
 org ReclaimedContinued
 MergeInputs:
   JSR ReadJoypads
+  LDA !number_additional_players
+  ASL
+  TAX
   REP #$20
-  LDA $0250      ; Joypad 1 inputs
-  ORA $0252      ; Joypad 2 inputs
-  ORA $0254      ; Joypad 3 inputs
-  ORA $0256      ; Joypad 4 inputs
+  LDA $00
+- ORA $0250,X
+  DEX
+  DEX
+  BPL -
   TAX
   SEP #$20
   RTS
