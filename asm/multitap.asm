@@ -4,7 +4,7 @@ hirom
 table c3.tbl,rtl ; this is just your typical menu character encodings
 
 !character_slot = $0201
-!number_additional_players = $1D4F
+!numplayers = $1D4F
 !reclaimed = $C346AD
 
 ; =========================================
@@ -30,7 +30,7 @@ RedrawPlayers:
   LDA #$20                ; Palette 0
   STA $29                 ; Color: User's
   TDC
-  LDA !number_additional_players
+  LDA !numplayers
   PHA
   ASL A                   ; Double it
   TAX                     ; Index it
@@ -45,7 +45,7 @@ RedrawPlayers:
 org $C33E86
 PlayersHandler:
   JSR $0EA3               ; Sound: Cursor
-  LDA !number_additional_players
+  LDA !numplayers
   STA $E0                 ; Store it
   LDA $0B                 ; Semi-auto keys
   BIT #$01                ; Pushing right?
@@ -68,7 +68,7 @@ IncrementPlayers:
   INC $E0
 StorePlayers:             ; Store the tmp variable back to the config
   LDA $E0
-  STA !number_additional_players
+  STA !numplayers
 .redraw
   JMP RedrawPlayers
 
@@ -105,23 +105,25 @@ DecodeBattleKeys:
   JSR ReadJoypads
   JSR MergeBattleInputs           ; load merged inputs onto X if nobody is active
   BNE .done                       ; if merged inputs were not loaded, A will be clear
-  LDA !character_slot
-.loop
-  CMP !number_additional_players
-  BEQ .read_joypad                ; if player count = N, give control to joypad N
-  BCC .read_joypad                ; if player count < N, give control to joypad N
-  SBC !number_additional_players  ; otherwise, N = N - number of players and try again
+  LDA !character_slot             ; get index of current character
+  JSR GetInputsForSlot            ; load joypad for character
+.done
+  JMP DecodeBattleKeys2           ; finish decoding buttons
+
+GetInputsForSlot:
+- CMP !numplayers
+  BEQ +                           ; if player count = N, give control to joypad N
+  BCC +                           ; if player count < N, give control to joypad N
+  SBC !numplayers  ; otherwise, N = N - number of players and try again
   DEC                             ;
-  BNE .loop                       ; This results in the following control schemes:
-.read_joypad                      ; 1-player: 1,1,1,1
-  ASL                             ; 2-player: 1,2,1,2
-  TAX                             ; 3-player: 1,2,3,1
-  REP #$20                        ;
+  BNE -                           ; This results in the following control schemes:
++ ASL                             ; 1-player: 1,1,1,1; 2-player: 1,2,1,2
+  TAX                             ; 3-player: 1,2,3,1; 4-player: 1,2,3,4
+  REP #$20                        ; 
   LDA $0250,X                     ; Load inputs for joypad N
   TAX
   SEP #$20
-.done
-  JMP DecodeBattleKeys2
+  RTS
 
 ; =========================================
 ; =  Merged input routine for field/menu  =
@@ -141,27 +143,46 @@ org $C3A4B2      ; Scrap the old "merged inputs" behaviour that was located here
 org ReclaimedContinued
 MergeInputs:
   JSR ReadJoypads
-  LDA !number_additional_players
-  ASL
-  TAX
+  LDA !numplayers  ; A = N, where N is number of players
+  ASL              ; input registers are 2 bytes each
+  TAX              ; index offset
   REP #$20
   LDA $00
-- ORA $0250,X
+- ORA $0250,X      ; merge inputs from each pad
   DEX
   DEX
-  BPL -
-  TAX
+  BPL -            ; loop until all players' inputs are read, but don't read from pads above player count
+  TAX              ; store in X for decoding
+  TDC
   SEP #$20
   RTS
 
 MergeBattleInputs:
-  LDA $7E7BC2         ; Current menu cursor state
-  BNE .activePlayer   ; 0 = no active turn
-  JSR MergeInputs     ; allow inputs from anyone
-  LDA #$01            ; set flag to prevent regular input loading
-  BRA .done           ; exit
+  LDA $7E7BC2             ; Current menu cursor state
+  CMP #$05                ; 5 = regular command menu
+  BEQ .mergePartial       ; allow start button from any valid pad
+  CMP #$00                ; 0 = no active turn
+  BNE .activePlayer       ; read from specific joypad if neither condition true
+  JSR MergeInputs         ; allow inputs from anyone between turns
+  LDA #$01                ; set flag to prevent regular input loading
+  BRA .done               ; exit
+.mergePartial
+  JSR MergeInputs         ; load merged inputs from all pads
+  PHX                     ; store it
+  LDA !character_slot     ; get current character
+  JSR GetInputsForSlot    ; get inputs for specific joypad
+  STX $0258               ; store it
+  REP #$20
+  PLA                     ; retrieve stored merged inputs
+  AND #$1000              ; just check for start button
+  ORA $0258               ; merge with current player's inputs
+  TAX                     ; store in X for decoding
+  TDC
+  SEP #$20
+  LDA #$01                ; set flag to prevent regular input loading
+  BRA .done               ; exit
 .activePlayer
-  TDC                 ; clear accumulator = proceed to decode inputs from specific joypad
+  TDC                     ; clear accumulator = proceed to decode inputs from specific joypad
 .done
   RTS
 
@@ -179,6 +200,7 @@ ReadJoypads: ; Credit to Vitor Vilela for the MP5 input decoding workaround
   LDA $421E         ; /
   STA $0254         ;/
   STZ $0256         ; Cannot read joypad 4 from Auto Joypad
+  STZ $0258         ; Used elsewhere, but need cleared between uses
   SEP #$20
 
   STZ $4201         ; I/O port 1->0
